@@ -254,15 +254,16 @@ void NetFTRDTDriver::recvThreadFunc()
         }
         else 
         {
+          double offsets[] = {-0.513683, 0.795966, 0.492555, 0.026970, -0.385113, -0.011795};  // change the offset here
           tmp_data.header.seq = seq_counter_++;
           tmp_data.header.stamp = ros::Time::now();
-          tmp_data.header.frame_id = "base_link";
-          tmp_data.wrench.force.x = double(rdt_record.fx_) * force_scale_;
-          tmp_data.wrench.force.y = double(rdt_record.fy_) * force_scale_;
-          tmp_data.wrench.force.z = double(rdt_record.fz_) * force_scale_;
-          tmp_data.wrench.torque.x = double(rdt_record.tx_) * torque_scale_;
-          tmp_data.wrench.torque.y = double(rdt_record.ty_) * torque_scale_;
-          tmp_data.wrench.torque.z = double(rdt_record.tz_) * torque_scale_;
+          tmp_data.header.frame_id = "link_ft";
+          tmp_data.wrench.force.x = double(rdt_record.fx_) * force_scale_ - offsets[0];
+          tmp_data.wrench.force.y = double(rdt_record.fy_) * force_scale_ - offsets[1];
+          tmp_data.wrench.force.z = double(rdt_record.fz_) * force_scale_ - offsets[2];
+          tmp_data.wrench.torque.x = double(rdt_record.tx_) * torque_scale_ - offsets[3];
+          tmp_data.wrench.torque.y = double(rdt_record.ty_) * torque_scale_ - offsets[4];
+          tmp_data.wrench.torque.z = double(rdt_record.tz_) * torque_scale_ - offsets[5];
           { boost::unique_lock<boost::mutex> lock(mutex_);
             new_data_ = tmp_data;
             lost_packets_ += (seqdiff - 1);
