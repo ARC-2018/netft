@@ -40,21 +40,33 @@
 #include "ros/ros.h"
 #include "netft_rdt_driver/netft_rdt_driver.h"
 #include "geometry_msgs/WrenchStamped.h"
+#include "geometry_msgs/Wrench.h"
 #include "diagnostic_msgs/DiagnosticArray.h"
 #include "diagnostic_updater/DiagnosticStatusWrapper.h"
 #include <unistd.h>
 #include <iostream>
 #include <memory>
 #include <boost/program_options.hpp>
+#include "netft_rdt_driver/Zero.h"
 
 namespace po = boost::program_options;
 using namespace std;
 
+geometry_msgs::Wrench offsets;
+bool setzero = false;
+
+bool zero(netft_rdt_driver::Zero::Request  &req,
+          netft_rdt_driver::Zero::Response &res){
+  setzero = true;
+  return true;
+}
 
 int main(int argc, char **argv)
 { 
   ros::init(argc, argv, "netft_node");
   ros::NodeHandle nh;
+  ros::ServiceServer service = nh.advertiseService("zero", zero);
+
 
   float pub_rate_hz;
   string address;
@@ -120,6 +132,16 @@ int main(int argc, char **argv)
     if (netft->waitForNewData())
     {
       netft->getData(data);
+      if(setzero){
+        offsets = data.wrench;
+        setzero = false;
+      }
+      data.wrench.force.x -= offsets.force.x;
+      data.wrench.force.y -= offsets.force.y;
+      data.wrench.force.z -= offsets.force.z;
+      data.wrench.torque.x -= offsets.torque.x;
+      data.wrench.torque.y -= offsets.torque.y;
+      data.wrench.torque.z -= offsets.torque.z;
       if (publish_wrench) 
       {
         //geometry_msgs::Wrench(data.wrench);
