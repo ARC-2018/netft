@@ -54,10 +54,21 @@ using namespace std;
 
 geometry_msgs::Wrench offsets;
 bool setzero = false;
+const int total_setzero_cnt = 100;
+int setzero_cnt = 0;
 
 bool zero(netft_rdt_driver::Zero::Request  &req,
           netft_rdt_driver::Zero::Response &res){
   setzero = true;
+  
+  // ros::Rate wait_rate(1);
+  // while (ros::ok())
+  // {
+    // if(!setzero)
+      // break;
+    // //printf("setzero %d\n", setzero);
+    // wait_rate.sleep();
+  // }
   return true;
 }
 
@@ -70,13 +81,15 @@ int main(int argc, char **argv)
 
   float pub_rate_hz;
   string address;
+  string frame_id;
 
   po::options_description desc("Options");
   desc.add_options()
     ("help", "display help")
-    ("rate", po::value<float>(&pub_rate_hz)->default_value(100.0), "set publish rate (in hertz)")
+    ("rate", po::value<float>(&pub_rate_hz)->default_value(1000.0), "set publish rate (in hertz)")
     ("wrench", "publish older Wrench message type instead of WrenchStamped")
     ("address", po::value<string>(&address), "IP address of NetFT box")
+    ("frame_id", po::value<string>(&frame_id)->default_value("link_ft"), "frame_id of FT sensor")
     ;
      
   po::positional_options_description p;
@@ -107,7 +120,7 @@ int main(int argc, char **argv)
     ROS_WARN("Publishing NetFT data as geometry_msgs::Wrench is deprecated");
   }
 
-  std::auto_ptr<netft_rdt_driver::NetFTRDTDriver> netft(new netft_rdt_driver::NetFTRDTDriver(address));
+  std::auto_ptr<netft_rdt_driver::NetFTRDTDriver> netft(new netft_rdt_driver::NetFTRDTDriver(address, frame_id));
   ros::Publisher pub;
   if (publish_wrench)
   {
@@ -133,23 +146,48 @@ int main(int argc, char **argv)
     {
       netft->getData(data);
       if(setzero){
-        offsets = data.wrench;
-        setzero = false;
+        printf("Calibrating %d / %d\n", setzero_cnt, total_setzero_cnt);
+        if(setzero_cnt == 0){
+          offsets = data.wrench;
+          setzero_cnt++;
+        }
+        else if(setzero_cnt < total_setzero_cnt){
+          geometry_msgs::Wrench tmp_wrench = data.wrench;
+          offsets.force.x += tmp_wrench.force.x;
+          offsets.force.y += tmp_wrench.force.y;
+          offsets.force.z += tmp_wrench.force.z;
+          offsets.torque.x += tmp_wrench.torque.x;
+          offsets.torque.y += tmp_wrench.torque.y;
+          offsets.torque.z += tmp_wrench.torque.z;
+          setzero_cnt++;
+        }
+        else{
+          setzero = false;
+          offsets.force.x /= total_setzero_cnt;
+          offsets.force.y /= total_setzero_cnt;
+          offsets.force.z /= total_setzero_cnt;
+          offsets.torque.x /= total_setzero_cnt;
+          offsets.torque.y /= total_setzero_cnt;
+          offsets.torque.z /= total_setzero_cnt;
+          setzero_cnt = 0;
+        }
       }
-      data.wrench.force.x -= offsets.force.x;
-      data.wrench.force.y -= offsets.force.y;
-      data.wrench.force.z -= offsets.force.z;
-      data.wrench.torque.x -= offsets.torque.x;
-      data.wrench.torque.y -= offsets.torque.y;
-      data.wrench.torque.z -= offsets.torque.z;
-      if (publish_wrench) 
-      {
-        //geometry_msgs::Wrench(data.wrench);
-        pub.publish(data.wrench);
-      }
-      else 
-      {
-        pub.publish(data);
+      else{
+        data.wrench.force.x -= offsets.force.x;
+        data.wrench.force.y -= offsets.force.y;
+        data.wrench.force.z -= offsets.force.z;
+        data.wrench.torque.x -= offsets.torque.x;
+        data.wrench.torque.y -= offsets.torque.y;
+        data.wrench.torque.z -= offsets.torque.z;
+        if (publish_wrench) 
+        {
+          //geometry_msgs::Wrench(data.wrench);
+          pub.publish(data.wrench);
+        }
+        else 
+        {
+          pub.publish(data);
+        }
       }
     }
     
